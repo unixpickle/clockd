@@ -122,10 +122,12 @@ function showSummary () {
 		$line = fgets($f);
 		if (strlen($line) > 0) {
 			$info = parseConfigLine($line);
+			$timeAdded = $info['end'] - $info['start'];
+			if ($info['end'] == 0) $timeAdded = time() - $info['start'];
 			if (!isset($projsTime[$info['project']])) {
-				$projsTime[$info['project']] = $info['end'] - $info['start'];
+				$projsTime[$info['project']] = $timeAdded;
 			} else {
-				$projsTime[$info['project']] += $info['end'] - $info['start'];
+				$projsTime[$info['project']] += $timeAdded;
 			}
 		}
 	}
