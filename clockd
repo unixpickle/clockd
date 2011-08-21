@@ -1,0 +1,187 @@
+#!/usr/bin/php
+<?php
+
+// make sure that they are in a shell
+if (empty($_SERVER['SHELL'])) {
+	die('Shells only please');
+}
+
+$configFile = $_SERVER['HOME'] . '/.clockd';
+main($argv);
+
+function getTheFile () {
+	global $configFile;
+	return $configFile;
+}
+
+function main ($args) {
+	if (count($args) == 1) {
+		printUsage();
+		exit();
+	} else {
+		if ($args[1] == 'status') {
+			showStatus();
+		} else if ($args[1] == 'stop') {
+			stopCurrent();
+		} else if ($args[1] == 'summary') {
+			showSummary();
+		} else if ($args[1] == 'start') {
+			if (count($args) != 3) {
+				printUsage();
+				exit();
+			}
+			startProject($args[2]);
+		}
+	}
+}
+
+function println ($str) {
+	echo $str;
+	echo "\n";
+}
+
+function printUsage () {
+	println('Usage: ' . ($argv[0]) . ' <command> [options]');
+	echo "\n";
+	println('Some common commands are:');
+	println('  status            show current status');
+	println('  stop              stop tracking for the active project');
+	println('  summary           show summary for all projects');
+	println('  start <project>   start a project');
+	echo "\n";
+	println('     Copyright (c) 2011 Alex Nichol - All Rights Reserved');
+	echo "\n";
+}
+
+function parseConfigLine ($aLine) {
+	$project = '';
+	$start = '';
+	$end = '';
+	for ($i = 0; $i < strlen($aLine); $i++) {
+		$char = substr($aLine, $i, 1);
+		if ($char == ':') break;
+		$project = $project . $char;
+	}
+	for ($i = strlen($project) + 1; $i < strlen($aLine); $i++) {
+		$char = substr($aLine, $i, 1);
+		if ($char == ':') break;
+		$start = $start . $char;
+	}
+	$endStart = strlen($project) + strlen($start) + 2;
+	if ($endStart < strlen($aLine)) {
+		$end = substr($aLine, $endStart, strlen($aLine) - $endStart);
+	}
+	return array('project' => $project, 'start' => $start, 'end' => $end);
+}
+
+function openProjectsFile () {
+	$fpMode = 'r+';
+	if (!file_exists(getTheFile())) {
+		$fpMode = 'w+';
+	}
+	$f = fopen(getTheFile(), $fpMode) or die('Failed to open projects file');
+	return $f;
+}
+
+function getCurrentProject ($f) {
+	fseek($f, 0);
+	while (!feof($f)) {
+		$line = fgets($f);
+		if (strlen($line) > 0) {
+			$info = parseConfigLine($line);
+			if (strlen($info['end']) == 0) {
+				return $info;
+			}
+		}
+	}
+	return null;
+}
+
+function startProject ($projName) {
+	global $argv;
+	$f = openProjectsFile();
+	// check to make sure that an item isn't currently being worked on.
+	$currProj = getCurrentProject($f);
+	if ($currProj != null) {
+		$currName = $currProj['project'];
+		println('Cannot start "' . $projName . '" while working on "' . $currName . '"');
+		echo "\n";
+		println('Run: `' . $argv[0] . ' stop` to stop work.');
+		exit();
+	}
+	fseek($f, 0, SEEK_END);
+	fwrite($f, $projName . ':' . getFormatTime() . "\n");
+	fclose($f);
+	showStatus();
+}
+
+function showSummary () {
+	$projsTime = array();
+	$f = openProjectsFile();
+	while (!feof($f)) {
+		$line = fgets($f);
+		if (strlen($line) > 0) {
+			$info = parseConfigLine($line);
+			if (!isset($projsTime[$info['project']])) {
+				$projsTime[$info['project']] = $info['end'] - $info['start'];
+			} else {
+				$projsTime[$info['project']] += $info['end'] - $info['start'];
+			}
+		}
+	}
+	fclose($f);
+	foreach ($projsTime as $key => $value) {
+		println('Worked on ' . $key . ' for ' . toDurationStr($value) . '.');
+	}
+}
+
+function stopCurrent () {
+	$f = openProjectsFile();
+	$currProj = getCurrentProject($f);
+	if ($currProj != null) {
+		$endTime = getFormatTime();
+		fseek($f, -1, SEEK_END);
+		fwrite($f, ':' . $endTime . "\n");
+		$duration = $endTime - $currProj['start'];
+		$durationStr = toDurationStr($duration);
+		println('Worked on "' . $currProj['project'] . '" for ' . $durationStr . '.');
+	} else {
+		println('Working on no projects.');
+	}
+	fclose($f);
+}
+
+function showStatus () {
+	$f = openProjectsFile();
+	$currProj = getCurrentProject($f);
+	if ($currProj != null) {
+		println('Working on "' . $currProj['project'] . '"');
+		println('  beginning at ' . fmtDate($currProj['start']));
+	} else {
+		println('Working on no projects.');
+	}
+	fclose($f);
+}
+
+function toDurationStr ($duration) {
+	$days = floor($duration / (60 * 60 * 24));
+	$hours = floor($duration / (60 * 60)) % 24;
+	$minutes = floor($duration / 60) % 60;
+	$seconds = floor($duration) % 60;
+	return sprintf("%d:%02d:%02d:%02d", $days, $hours, $minutes, $seconds);
+}
+
+function getFormatTime () {
+	return time();
+}
+
+function fromFormatTime ($fmtTime) {
+	return $fmtTime;
+}
+
+function fmtDate ($timestamp) {
+	date_default_timezone_set('America/New_York');
+	return date(DATE_RFC822, $timestamp);
+}
+
+?>
