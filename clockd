@@ -159,6 +159,7 @@ function showStatus () {
 	if ($currProj != null) {
 		println('Working on "' . $currProj['project'] . '"');
 		println('  beginning at ' . fmtDate($currProj['start']));
+		println('   duration: ' . toDurationStr(time() - $currProj['start']));
 	} else {
 		println('Working on no projects.');
 	}
