@@ -41,7 +41,7 @@ function println ($str) {
 }
 
 function printUsage () {
-	println('Usage: ' . ($argv[0]) . ' <command> [options]');
+	println('Usage: clockd <command> [options]');
 	echo "\n";
 	println('Some common commands are:');
 	println('  status            show current status');
