@@ -28,7 +28,7 @@ Then, check on your current work status with ```clockd status```
 Once you are finished working for the day, just clock-out using ```clockd stop```.
 
     $ clockd stop
-    Worked on "My Project" for 0:20:34:12.
+    Worked on "My Project" for 0:03:34:12.
 
 Of course, it's always nice to have your computer do math for you.  That's why you can use the ```clockd summary``` command to check out your total hours on all of your projects:
 
