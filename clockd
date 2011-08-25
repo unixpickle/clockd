@@ -14,6 +14,16 @@ function getTheFile () {
 	return $configFile;
 }
 
+function setTimezone () {
+	date_default_timezone_set('America/New_York');
+}
+
+function processTime ($anArg) {
+	if (strlen($anArg) < 7) return null;
+	if (substr($anArg, 0, 7) != '--time=') return null;
+	return substr($anArg, 7, strlen($anArg) - 7);
+}
+
 function main ($args) {
 	if (count($args) == 1) {
 		printUsage();
@@ -24,7 +34,17 @@ function main ($args) {
 		} else if ($args[1] == 'stop') {
 			stopCurrent();
 		} else if ($args[1] == 'summary') {
-			showSummary();
+			if (count($args) == 3) {
+				$time = processTime($args[2]);
+				if ($time != null) {
+					showSummary($time);
+				} else {
+					println('Invalid time string: ' . $args[2]);
+					exit();
+				}
+			} else {
+				showSummary();
+			}
 		} else if ($args[1] == 'start') {
 			if (count($args) != 3) {
 				printUsage();
@@ -36,18 +56,21 @@ function main ($args) {
 }
 
 function println ($str) {
-	echo $str;
-	echo "\n";
+	echo $str . "\n";
 }
 
 function printUsage () {
 	println('Usage: clockd <command> [options]');
 	echo "\n";
 	println('Some common commands are:');
-	println('  status            show current status');
-	println('  stop              stop tracking for the active project');
-	println('  summary           show summary for all projects');
-	println('  start <project>   start a project');
+	println('  status              show current status');
+	println('  stop                stop tracking for the active project');
+	println('  summary [--time=x]  show summary for all projects');
+	println('  start <project>     start a project');
+	echo "\n";
+	println('Valid options for the `--time` flag:');
+	println('  --time=week         this week starting at 00:00 on sunday');
+	println('  --time=day          today starting at 00:00');
 	echo "\n";
 	println('     Copyright (c) 2011 Alex Nichol - All Rights Reserved');
 	echo "\n";
@@ -83,6 +106,20 @@ function openProjectsFile () {
 	return $f;
 }
 
+function constrainedDuration ($constraint, $start, $end) {
+	if ($start > $end) {
+		println('constrainedDuration: end time cannot be before start time');
+		exit();
+	}
+	if ($start > $constraint) {
+		return $end - $start;
+	} else if ($end < $constraint) {
+		return 0;
+	} else {
+		return $end - $constraint;
+	}
+}
+
 function getCurrentProject ($f) {
 	fseek($f, 0);
 	while (!feof($f)) {
@@ -115,19 +152,31 @@ function startProject ($projName) {
 	showStatus();
 }
 
-function showSummary () {
+function showSummary ($time = 'total') {
+	setTimezone();
+	$constraining = 0; // time to slice off
+	if ($time == 'week') {
+		$constraining = strtotime('last sunday, 00:00');
+	} else if ($time == 'day') {
+		$constraining = strtotime('today, 00:00');
+	} else if ($time != 'total') {
+		println('Invalid time constraint identifier: ' . $time);
+		exit();
+	}
 	$projsTime = array();
 	$f = openProjectsFile();
 	while (!feof($f)) {
 		$line = fgets($f);
 		if (strlen($line) > 0) {
 			$info = parseConfigLine($line);
-			$timeAdded = $info['end'] - $info['start'];
-			if ($info['end'] == 0) $timeAdded = time() - $info['start'];
+			$startTime = $info['start'];
+			$endTime = $info['end'];
+			if ($info['end'] == 0) $endTime = time(); 
+			$total = constrainedDuration($constraining, $startTime, $endTime);
 			if (!isset($projsTime[$info['project']])) {
-				$projsTime[$info['project']] = $timeAdded;
+				$projsTime[$info['project']] = $total;
 			} else {
-				$projsTime[$info['project']] += $timeAdded;
+				$projsTime[$info['project']] += $total;
 			}
 		}
 	}
@@ -183,7 +232,7 @@ function fromFormatTime ($fmtTime) {
 }
 
 function fmtDate ($timestamp) {
-	date_default_timezone_set('America/New_York');
+	setTimezone();
 	return date(DATE_RFC822, $timestamp);
 }
 
